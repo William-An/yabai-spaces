@@ -238,8 +238,11 @@ launchctl load ~/Library/LaunchAgents/com.user.yabai-save-windows.plist
 
 Triggered automatically by yabai signals on `display_added` and `display_resized`.
 
-- Relabels spaces from saved UUID→label mapping
-- Moves spaces to correct displays by UUID (falls back to position)
-- Restores windows using app+title matching
+1. **Relabels spaces sequentially** by index (1→laptop1, 2→laptop2, ..., N→leftN, etc.)
+2. **Moves spaces** to correct displays by UUID (falls back to position)
+3. **Restores windows** to saved spaces using app+title matching
+
+This approach is robust: even if labels are lost or spaces recreated, the sequential relabeling ensures windows can always be restored to the correct location.
+
 - Uses file locking to prevent concurrent runs
 - Logs to `~/.config/yabai/restore-spaces.log`

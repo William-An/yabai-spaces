@@ -79,72 +79,63 @@ fi
 source "$CONFIG_FILE"
 
 # -----------------------------------------------------------------------------
-# Relabel spaces based on saved UUID → label mapping
+# Relabel spaces sequentially based on config arrays
 # -----------------------------------------------------------------------------
-# This ensures labels are restored even after monitor disconnect/reconnect
+# Labels spaces by index order: laptop spaces first, then left, then right.
+# This ensures labels are always correct regardless of previous state.
 
-relabel_spaces_from_mapping() {
-    if [[ ${#SPACE_UUID_LABELS[@]} -eq 0 ]]; then
-        log "No SPACE_UUID_LABELS mapping found in config - skipping relabeling"
+relabel_spaces_sequential() {
+    log ""
+    log "Relabeling spaces sequentially..."
+
+    # Build combined label array in order
+    local all_labels=("${LAPTOP_SPACES[@]}" "${LEFT_SPACES[@]}" "${RIGHT_SPACES[@]}")
+    local total_labels=${#all_labels[@]}
+
+    if [[ $total_labels -eq 0 ]]; then
+        log "  No space labels defined in config"
         return
     fi
-    
-    log ""
-    log "Relabeling spaces from saved mapping..."
-    
-    # Get current spaces
+
+    # Get current spaces sorted by index
     local current_spaces=$(yabai -m query --spaces 2>/dev/null)
     if [[ -z "$current_spaces" ]]; then
         log "  Error: Cannot query spaces"
         return
     fi
-    
+
+    local num_spaces=$(echo "$current_spaces" | jq 'length')
     local relabeled=0
-    local skipped=0
-    
-    for mapping in "${SPACE_UUID_LABELS[@]}"; do
-        # Parse "uuid:label" format
-        local space_uuid="${mapping%%:*}"
-        local expected_label="${mapping#*:}"
-        
-        # Find the space with this UUID and get its index (for labeling) and current label
-        local space_info=$(echo "$current_spaces" | jq -r --arg uuid "$space_uuid" '.[] | select(.uuid == $uuid) | "\(.index):\(.label // "")"')
-        
-        if [[ -z "$space_info" ]]; then
-            log "  UUID ...${space_uuid: -8}: not found (may have been destroyed)"
-            continue
-        fi
-        
-        local space_index="${space_info%%:*}"
-        local current_label="${space_info#*:}"
-        
-        if [[ -z "$current_label" || "$current_label" == "null" ]]; then
-            # Space exists but has no label - relabel it using id
-            log "  Space Index $space_index (UUID ...${space_uuid: -8}) → $expected_label (relabeling)"
-            yabai -m space "$space_index" --label "$expected_label" 2>/dev/null && \
-                { log "  Space Index $space_index (UUID ...${space_uuid: -8}) → $expected_label (relabeled)"; ((relabeled++)); } || \
-                log "  Space Index $space_index: failed to relabel"
-        elif [[ "$current_label" != "$expected_label" ]]; then
-            # Label exists but doesn't match - relabel it using id
-            log "  Space Index $space_index (UUID ...${space_uuid: -8}) → $expected_label (relabeling)"
-            yabai -m space "$space_index" --label "$expected_label" 2>/dev/null && \
-                { log "  Space Index $space_index (UUID ...${space_uuid: -8}) → $expected_label (was: $current_label)"; ((relabeled++)); } || \
-                log "  Space Index $space_index: failed to relabel"
-        else
-            # Label already correct
-            ((skipped++))
+
+    # Label each space by index (1-based)
+    for ((i=0; i<total_labels && i<num_spaces; i++)); do
+        local space_index=$((i + 1))
+        local expected_label="${all_labels[$i]}"
+
+        # Get current label for this index
+        local current_label=$(echo "$current_spaces" | jq -r --argjson idx "$space_index" \
+            '.[] | select(.index == $idx) | .label // ""')
+
+        log "  Space $space_index: $current_label → $expected_label"
+        if [[ "$current_label" != "$expected_label" ]]; then
+            if yabai -m space "$space_index" --label "$expected_label" 2>/dev/null; then
+                ((relabeled++))
+                log "  Space $space_index: relabeled as $expected_label"
+            else
+                log "  Space $space_index: failed to label as $expected_label"
+            fi
         fi
     done
-    
+
     if [[ $relabeled -gt 0 ]]; then
-        log "  Relabeled $relabeled space(s), $skipped already correct"
+        log "  Relabeled $relabeled space(s)"
     else
-        log "  All $skipped space(s) already have correct labels"
+        log "  All spaces already labeled correctly"
     fi
 }
 
 # Relabel spaces before proceeding
-relabel_spaces_from_mapping
+relabel_spaces_sequential
 
 # Get current displays
 DISPLAYS=$(yabai -m query --displays 2>/dev/null)
