@@ -85,6 +85,54 @@ if [[ $NUM_DISPLAYS -lt 3 ]]; then
     exit 0
 fi
 
+# Load configuration for space labels
+CONFIG_FILE="$SCRIPT_DIR/displays.conf"
+if [[ ! -f "$CONFIG_FILE" ]]; then
+    log "Error: $CONFIG_FILE not found"
+    exit 1
+fi
+source "$CONFIG_FILE"
+
+# -----------------------------------------------------------------------------
+# Relabel spaces sequentially before saving
+# -----------------------------------------------------------------------------
+# Ensures labels are correct even if spaces were created/destroyed
+
+relabel_spaces_sequential() {
+    # Build combined label array in order
+    local all_labels=("${LAPTOP_SPACES[@]}" "${LEFT_SPACES[@]}" "${RIGHT_SPACES[@]}")
+    local total_labels=${#all_labels[@]}
+
+    if [[ $total_labels -eq 0 ]]; then
+        return
+    fi
+
+    # Get current spaces
+    local current_spaces=$(yabai -m query --spaces 2>/dev/null)
+    if [[ -z "$current_spaces" ]]; then
+        return
+    fi
+
+    local num_spaces=$(echo "$current_spaces" | jq 'length')
+
+    # Label each space by index (1-based)
+    for ((i=0; i<total_labels && i<num_spaces; i++)); do
+        local space_index=$((i + 1))
+        local expected_label="${all_labels[$i]}"
+
+        # Get current label for this index
+        local current_label=$(echo "$current_spaces" | jq -r --argjson idx "$space_index" \
+            '.[] | select(.index == $idx) | .label // ""')
+
+        if [[ "$current_label" != "$expected_label" ]]; then
+            yabai -m space "$space_index" --label "$expected_label" 2>/dev/null
+        fi
+    done
+}
+
+# Relabel spaces before saving to ensure correct labels
+relabel_spaces_sequential
+
 # Get all windows with their space labels
 WINDOWS=$(yabai -m query --windows 2>/dev/null)
 SPACES=$(yabai -m query --spaces 2>/dev/null)

@@ -318,63 +318,6 @@ if $USED_FALLBACK; then
     fi
 fi
 
-# Move spaces to correct displays
-log ""
-log "Moving spaces to displays..."
-
-if [[ -n "$LAPTOP_INDEX" && ${#LAPTOP_SPACES[@]} -gt 0 ]]; then
-    for space in "${LAPTOP_SPACES[@]}"; do
-        yabai -m space "$space" --display "$LAPTOP_INDEX" 2>/dev/null && \
-            log "  Space $space → laptop (display $LAPTOP_INDEX)" || \
-            log "  Space $space: already on laptop or doesn't exist"
-    done
-fi
-
-if [[ -n "$LEFT_INDEX" && ${#LEFT_SPACES[@]} -gt 0 ]]; then
-    for space in "${LEFT_SPACES[@]}"; do
-        yabai -m space "$space" --display "$LEFT_INDEX" 2>/dev/null && \
-            log "  Space $space → left (display $LEFT_INDEX)" || \
-            log "  Space $space: already on left or doesn't exist"
-    done
-fi
-
-# Track spaces going to left for merging
-LEFT_MERGED_SPACES=("${LEFT_SPACES[@]}")
-
-if [[ -n "$RIGHT_INDEX" && ${#RIGHT_SPACES[@]} -gt 0 ]]; then
-    for space in "${RIGHT_SPACES[@]}"; do
-        yabai -m space "$space" --display "$RIGHT_INDEX" 2>/dev/null && \
-            log "  Space $space → right (display $RIGHT_INDEX)" || \
-            log "  Space $space: already on right or doesn't exist"
-    done
-elif [[ -z "$RIGHT_INDEX" && -n "$LEFT_INDEX" && ${#RIGHT_SPACES[@]} -gt 0 ]]; then
-    # No right monitor - merge right spaces onto left external
-    log "  (No right monitor - merging right spaces onto left)"
-    for space in "${RIGHT_SPACES[@]}"; do
-        yabai -m space "$space" --display "$LEFT_INDEX" 2>/dev/null && \
-            log "  Space $space → left (display $LEFT_INDEX)" || \
-            log "  Space $space: already on left or doesn't exist"
-    done
-    # Add right spaces to left merged array for reordering
-    LEFT_MERGED_SPACES+=("${RIGHT_SPACES[@]}")
-fi
-
-# Reorder spaces on each display
-log ""
-log "Reordering spaces..."
-
-if [[ -n "$LAPTOP_INDEX" && ${#LAPTOP_SPACES[@]} -gt 1 ]]; then
-    reorder_spaces "$LAPTOP_INDEX" "${LAPTOP_SPACES[@]}"
-fi
-
-if [[ -n "$LEFT_INDEX" && ${#LEFT_MERGED_SPACES[@]} -gt 1 ]]; then
-    reorder_spaces "$LEFT_INDEX" "${LEFT_MERGED_SPACES[@]}"
-fi
-
-if [[ -n "$RIGHT_INDEX" && ${#RIGHT_SPACES[@]} -gt 1 ]]; then
-    reorder_spaces "$RIGHT_INDEX" "${RIGHT_SPACES[@]}"
-fi
-
 # -----------------------------------------------------------------------------
 # Restore windows to their saved spaces
 # -----------------------------------------------------------------------------
